@@ -1,0 +1,528 @@
+/-- 
+    Edoardo Conti;
+    Matricola 278717;
+    Progetto di Linguaggi di Programmazione e Verifica del Software;
+    Modello: Intelligent Traffic Monitoring System (ITMS);
+    Sessione Estiva 2019;
+
+    Software: NuSMV 2.6.0
+
+    NOTA #0: Il tempo di verde (GLL) assegnato alle corsie/semafori è definito pari alla priorità di questi.
+    NOTA #1: Per la generazione dei veicoli di emergenza si evita l'utilizzo di un booleano per via del numero esagerato d'occorrenze, optando per 
+    un valore intero nel range [1,5]. Nel momento in cui questo sia pari a 5 si attiva il flag di rilevazione veicolo d'emergenza.
+    NOTA #2: Se viene rilevata un'emergenza, il semaforo della corsia interessata verrà impostato a VERDE e si procederà con il deflusso
+    veicolare con tempo di verde pari a quanto già assegnato per liberare completamente la corsia.
+    Se l'emergenza si presenta in una strada già gestita in precedenza (gll=0,priorità=-1), verrà assegnato un tempo di verde indicativo pari a 1.
+    NOTA #3: A parità di priorità, il semaforo a diventare GIALLO è quello con priorità massima in ordine decrescente delle strade (bottom-up).
+    NOTA #4: Una volta che tutte le corsie vengono liberate si procede con una nuova assegnazione delle priorità e ripristino delle assegnazioni.
+    NOTA #5: La verifica delle CTLSPEC e LTLSPEC (1° volta) può richiedere circa 1/2 minuti d'attesa. ( usare: dynamic_var_ordering -e sift )
+ --/
+
+
+/-- 
+    main: modulo principale obbligatorio del modello 
+ --/
+MODULE main
+VAR
+    -- 4 strade
+    street1 : Street;
+	street2 : Street;
+    street3 : Street;
+	street4 : Street;
+    -- 1 microcontrollore 
+	atmega2560 : Microcontroller(street1, street2, street3, street4);
+
+
+-- CTLSPECs
+CTLSPEC
+    -- Verifica semafori VERDI simultanei
+    -- specification  EF (...)  is false
+    EF(
+        (street1.t_l.state = VERDE & street2.t_l.state = VERDE & street3.t_l.state = VERDE & street4.t_l.state = VERDE) |
+        (street1.t_l.state = VERDE & street2.t_l.state = VERDE & street3.t_l.state = VERDE) |
+        (street1.t_l.state = VERDE & street2.t_l.state = VERDE & street4.t_l.state = VERDE) |
+        (street1.t_l.state = VERDE & street3.t_l.state = VERDE & street4.t_l.state = VERDE) |
+        (street2.t_l.state = VERDE & street3.t_l.state = VERDE & street4.t_l.state = VERDE) |
+        (street1.t_l.state = VERDE & street2.t_l.state = VERDE) |
+        (street1.t_l.state = VERDE & street3.t_l.state = VERDE) |
+        (street2.t_l.state = VERDE & street3.t_l.state = VERDE) |
+        (street2.t_l.state = VERDE & street4.t_l.state = VERDE) |
+        (street3.t_l.state = VERDE & street4.t_l.state = VERDE) |
+        (street4.t_l.state = VERDE & street1.t_l.state = VERDE)
+    );
+
+CTLSPEC
+    -- Verifica semafori GIALLI simultanei
+    -- specification  EF (...)  is false
+    EF(
+        (street1.t_l.state = GIALLO & street2.t_l.state = GIALLO & street3.t_l.state = GIALLO & street4.t_l.state = GIALLO) |
+        (street1.t_l.state = GIALLO & street2.t_l.state = GIALLO & street3.t_l.state = GIALLO) |
+        (street1.t_l.state = GIALLO & street2.t_l.state = GIALLO & street4.t_l.state = GIALLO) |
+        (street1.t_l.state = GIALLO & street3.t_l.state = GIALLO & street4.t_l.state = GIALLO) |
+        (street2.t_l.state = GIALLO & street3.t_l.state = GIALLO & street4.t_l.state = GIALLO) |
+        (street1.t_l.state = GIALLO & street2.t_l.state = GIALLO) |
+        (street1.t_l.state = GIALLO & street3.t_l.state = GIALLO) |
+        (street2.t_l.state = GIALLO & street3.t_l.state = GIALLO) |
+        (street2.t_l.state = GIALLO & street4.t_l.state = GIALLO) |
+        (street3.t_l.state = GIALLO & street4.t_l.state = GIALLO) |
+        (street4.t_l.state = GIALLO & street1.t_l.state = GIALLO)
+    );
+
+CTLSPEC
+    -- Verifica presenza semaforo verde se flag emergenza attivo
+    -- specification  EF (...)  is true
+    EF(atmega2560.status & atmega2560.e_sensor & 
+    (street1.t_l.state = VERDE | street2.t_l.state = VERDE | street3.t_l.state = VERDE | street4.t_l.state = VERDE));
+
+CTLSPEC	
+    -- Verifica assegnazione GLL=1 a semaforo con emergenza precedentemente ROSSO e GLL=0
+    -- specification  AF (...)  is true
+	AF((atmega2560.status & atmega2560.e_value = 5 & !(atmega2560.e_sensor) & atmega2560.e_street = 1 & street1.t_l.state = ROSSO & street1.t_l.gll = 0)
+    -> AX(street1.t_l.gll = 1));
+
+CTLSPEC
+    -- Verifica assegnazione corretta del GIALLO al semaforo in coda candidato (next_giallo)
+    -- specification  (AF (...))  is true
+    AF(atmega2560.status & atmega2560.e_value != 5 & atmega2560.next_giallo = 1) -> AX(street1.t_l.state = GIALLO);
+
+CTLSPEC	
+    -- Verifica generazione emergenza correttamente rilevata con attivazione flag
+    -- specification  AG (...)  is true
+	AG((atmega2560.status & atmega2560.e_value = 5 & !(atmega2560.e_sensor)) -> AX(atmega2560.e_sensor = TRUE));
+
+
+-- LTLSPECs
+LTLSPEC
+    -- Un ciclo di assegnazione degli stati dei semafori è terminato, si pausa il sistema per riassegnare nuove priorità
+    -- specification  (F (...))  is true
+	F(atmega2560.status & street1.t_l.state = ROSSO & street2.t_l.state = ROSSO & street3.t_l.state = ROSSO & street4.t_l.state = ROSSO &
+    street1.t_l.priority = -1 & street2.t_l.priority = -1 & street3.t_l.priority = -1 & street4.t_l.priority = -1) -> X(!atmega2560.status);
+
+LTLSPEC
+    -- In seguito alla generazione di un'emergenza, il semaforo su cui si presenterà il veicolo dovrà essere VERDE
+    -- specification G (...)  is true
+    G((atmega2560.status & atmega2560.e_value = 5 & !(atmega2560.e_sensor) & atmega2560.e_street = 1) -> 
+    X(street1.t_l.state = VERDE));
+
+LTLSPEC
+    -- In seguito alla generazione di un'emergenza, il semaforo GIALLO dovrà passare a ROSSO se lane diversa
+    -- specification G (...)  is true
+    G((atmega2560.status & atmega2560.e_value = 5 & !(atmega2560.e_sensor) & atmega2560.e_street != 1 & street1.t_l.state = GIALLO) -> 
+    X(street1.t_l.state = ROSSO));
+
+LTLSPEC
+    -- In seguito alla generazione di un'emergenza, il semaforo VERDE dovrà passare a GIALLO se lane diversa
+    -- specification G (...)  is true
+    G((atmega2560.status & atmega2560.e_value = 5 & !(atmega2560.e_sensor) & atmega2560.e_street != 1 & street1.t_l.state = VERDE) -> 
+    X(street1.t_l.state = GIALLO));
+
+LTLSPEC
+    -- Semaforo VERDE, in assenza di veicolo d'emergenza, non cambia stato fino allo scadere del GLL proprietario
+    -- specification G (...)  is true
+	G((atmega2560.status & street1.t_l.state = VERDE & atmega2560.e_value != 5 & street1.t_l.gll > 0) ->
+    X(street1.t_l.state = VERDE));
+
+-- NOTA: Spec. commentata perchè più lenta rispetto alle altre, attivare in caso di test.
+/-- 
+LTLSPEC
+    -- Semaforo VERDE, in assenza di veicolo d'emergenza, cambia in stato GIALLO, comportamento non corretto.
+    -- specification G (...)  is false
+	G((atmega2560.status & street1.t_l.state = VERDE & atmega2560.e_value != 5) ->
+    X(street1.t_l.state = GIALLO));   
+--/
+
+
+/-- 
+    Street: modellazione di una strada con 4 sensori per il rilevamento del traffico ed 1 semaforo
+ --/
+MODULE Street
+VAR
+	-- 4 sensori a coppia
+	-- {s1, s3} -> low density zone
+	-- {s2, s4} -> high density zone
+	s1 : Sensor;
+	s2 : Sensor;
+	s3 : Sensor;
+	s4 : Sensor;
+	-- 1 semaforo
+	t_l : Traffic_Light;
+
+
+/-- 
+    Sensor: modellazione di un sensore per la rilevazione di traffico nelle corsie
+    (alternativa: utilizzo diretto dei boolean nelle variabili sensori (s1,s2,s3,s4) del modulo Street)
+ --/
+MODULE Sensor
+VAR
+	-- lettura del sensore: ALTO -> true | BASSO -> false
+	value: boolean;
+    -- TODO:
+
+
+/-- 
+    Traffic_Light: modellazione semaforo con 3 stati possibili: ROSSO, GIALLO e VERDE; 
+    - gll, tempo di verde definito in un range [-1, 5]
+    - priority, priorità del semaforo calcolata tramite lettura sensori
+ --/
+MODULE Traffic_Light
+VAR
+	-- stato corrente del semaforo
+	state: {ROSSO, GIALLO, VERDE};
+	-- Green Light Lenght (GLL)
+	gll: -1..5;
+	-- priorità
+	priority: -1..5;
+
+ASSIGN
+    -- inizializzazione semaforo
+	-- stato => rosso
+	init(state) := ROSSO;
+	-- priorità => 0 ( non ancora calcolata )
+	init(priority) := 0;
+	-- GLL => -1 ( non ancora assegnato )
+	init(gll) := -1;
+
+
+/-- 
+    Microcontroller: modellazione microcontrollore che governa l'intera simulazione
+    - status, stato che se attivo indica che le priorità sono state correttamente assegnate, ergo sistema in funzione
+    - next_giallo, indicatore del prossimo semaforo(strada) GIALLO
+    - e_value, generatore di interi casuali tra [1, 5] per simulare occorrenza veicolo d'emergenza ( = 5 )
+    - e_sensor, sensore di rilevazione di un veicolo d'emergenza
+    - e_street, strada su cui è rilevato il veicolo d'emergenza
+--/
+MODULE Microcontroller(street1,street2,street3,street4)
+VAR
+    -- stato microcontrollore
+    status: boolean;
+    -- prossimo semaforo giallo
+    next_giallo: -1..4;
+	-- variabili gestione dell'emergenza
+    -- intero limitatore della Probabilità d'occorrenza dell'emergenze
+	e_value : 1..5;
+	e_sensor : boolean;
+    -- indicatore strada con emergenza
+	e_street : 1..4;
+
+ASSIGN
+    -- inizializzazione
+    init(status) := FALSE;
+    init(next_giallo) := 0;
+    init(e_value) := 1;
+    init(e_sensor) := FALSE;
+
+    -- logica status controllore
+    next(status) := case
+        -- sistema in funzione, priorità resettate ma almeno una strada con semaforo in uno stato differente dal ROSSO
+        (status) & (
+        ((street1.t_l.priority = -1) & (street2.t_l.priority = -1) & (street3.t_l.priority = -1) & (street4.t_l.priority = -1)) &
+        ((street1.t_l.state != ROSSO) | (street2.t_l.state != ROSSO) | (street3.t_l.state != ROSSO) | (street4.t_l.state != ROSSO))): TRUE;
+        -- priorità di ogni strada resettata oppure uguali a 0 (casistica in cui il traffico sia assente nell'incrocio)
+        ((street1.t_l.priority = -1) & (street2.t_l.priority = -1) & (street3.t_l.priority = -1) & (street4.t_l.priority = -1)) | 
+        ((street1.t_l.priority = 0) & (street2.t_l.priority = 0) & (street3.t_l.priority = 0) & (street4.t_l.priority = 0)): FALSE;
+        -- almeno una priorità non resettata, quindi una strada deve ultimare il deflusso
+        (!(street1.t_l.priority = -1) & !(street2.t_l.priority = -1) & !(street3.t_l.priority = -1) & !(street4.t_l.priority = -1)) : TRUE;
+        TRUE : status;
+    esac;
+
+    -- logica priorità dei 4 semafori dipendente da lettura sensori
+	next(street1.t_l.priority) := case
+        (status = FALSE & street1.s1.value = TRUE & street1.s2.value = TRUE & street1.s3.value = TRUE & street1.s4.value = TRUE ) : 5;
+		(status = FALSE & street1.s1.value = TRUE & street1.s2.value = FALSE & street1.s3.value = TRUE & street1.s4.value = TRUE ) : 4;
+		(status = FALSE & street1.s1.value = TRUE & street1.s2.value = TRUE & street1.s3.value = TRUE & street1.s4.value = FALSE ) : 4;
+		(status = FALSE & street1.s1.value = TRUE & street1.s2.value = FALSE & street1.s3.value = TRUE & street1.s4.value = FALSE ) : 3;
+		(status = FALSE & street1.s1.value = FALSE & street1.s2.value = FALSE & street1.s3.value = TRUE & street1.s4.value = TRUE ) : 2;
+		(status = FALSE & street1.s1.value = TRUE & street1.s2.value = TRUE & street1.s3.value = FALSE & street1.s4.value = FALSE ) : 2;
+		(status = FALSE & street1.s1.value = TRUE & street1.s2.value = FALSE & street1.s3.value = FALSE & street1.s4.value = FALSE ) : 1;
+		(status = FALSE & street1.s1.value = FALSE & street1.s2.value = FALSE & street1.s3.value = TRUE & street1.s4.value = FALSE ) : 1;
+		(status = FALSE & street1.s1.value = FALSE & street1.s2.value = FALSE & street1.s3.value = FALSE & street1.s4.value = FALSE ) : 0;
+        -- fix per casistiche non coperte (7/16) e/o non consentite
+        (status = FALSE & next(status = FALSE) & street1.t_l.priority = -1) : 0;
+        -- semaforo giallo che diventerà rosso per l'emergenza in arrivo, ripristino priorità (cond. DIPENDENTE da posizione!)
+        ((status) & e_value = 5 & e_sensor = FALSE & street1.t_l.state = GIALLO & next(street1.t_l.state) = ROSSO) : street1.t_l.gll;
+        -- semaforo giallo, reset priorità per non essere più pescato
+        ((status) & (street1.t_l.state = ROSSO) & next(street1.t_l.state = GIALLO)) : -1;
+        -- semaforo rosso e arriva emergenza in questa lane => resetto priorità 
+        ((status) & street1.t_l.state = ROSSO & next(street1.t_l.state = VERDE) & 
+        e_sensor = FALSE & e_value = 5 & e_street = 1) : -1;
+        -- reset se ultima rimasta con priorità -1
+        ((status) & (street1.t_l.priority) = 0 & 
+        (((street2.t_l.priority = -1) | (street2.t_l.priority = 0)) &
+        ((street3.t_l.priority = -1) | (street3.t_l.priority = 0)) &
+        ((street4.t_l.priority = -1) | (street4.t_l.priority = 0)))) : -1;
+        ((next(status) = TRUE) & street1.t_l.state != GIALLO) : street1.t_l.priority;
+        TRUE: street1.t_l.priority;
+	esac;
+    next(street2.t_l.priority) := case
+        (status = FALSE & street2.s1.value = TRUE & street2.s2.value = TRUE & street2.s3.value = TRUE & street2.s4.value = TRUE ) : 5;
+		(status = FALSE & street2.s1.value = TRUE & street2.s2.value = FALSE & street2.s3.value = TRUE & street2.s4.value = TRUE ) : 4;
+		(status = FALSE & street2.s1.value = TRUE & street2.s2.value = TRUE & street2.s3.value = TRUE & street2.s4.value = FALSE ) : 4;
+		(status = FALSE & street2.s1.value = TRUE & street2.s2.value = FALSE & street2.s3.value = TRUE & street2.s4.value = FALSE ) : 3;
+		(status = FALSE & street2.s1.value = FALSE & street2.s2.value = FALSE & street2.s3.value = TRUE & street2.s4.value = TRUE ) : 2;
+		(status = FALSE & street2.s1.value = TRUE & street2.s2.value = TRUE & street2.s3.value = FALSE & street2.s4.value = FALSE ) : 2;
+		(status = FALSE & street2.s1.value = TRUE & street2.s2.value = FALSE & street2.s3.value = FALSE & street2.s4.value = FALSE ) : 1;
+		(status = FALSE & street2.s1.value = FALSE & street2.s2.value = FALSE & street2.s3.value = TRUE & street2.s4.value = FALSE ) : 1;
+		(status = FALSE & street2.s1.value = FALSE & street2.s2.value = FALSE & street2.s3.value = FALSE & street2.s4.value = FALSE ) : 0;
+        -- fix per casistiche non coperte (7/16) e/o non consentite
+        (status = FALSE & next(status = FALSE) & street2.t_l.priority = -1) : 0;
+        -- semaforo giallo che diventerà rosso per l'emergenza in arrivo, ripristino priorità (cond. DIPENDENTE da posizione!)
+        ((status) & e_value = 5 & e_sensor = FALSE & street2.t_l.state = GIALLO & next(street2.t_l.state) = ROSSO) : street2.t_l.gll;
+        -- semaforo giallo, reset priorità per non essere più pescato
+        ((status) & (street2.t_l.state = ROSSO) & next(street2.t_l.state = GIALLO)) : -1;
+        -- semaforo rosso e arriva emergenza in questa lane => resetto priorità 
+        ((status) & street2.t_l.state = ROSSO & next(street2.t_l.state = VERDE) & 
+        e_sensor = FALSE & e_value = 5 & e_street = 2) : -1;
+        -- reset se ultima rimasta con priorità -1
+        ((status) & (street2.t_l.priority) = 0 & 
+        (((street1.t_l.priority = -1) | (street1.t_l.priority = 0)) &
+        ((street3.t_l.priority = -1) | (street3.t_l.priority = 0)) &
+        ((street4.t_l.priority = -1) | (street4.t_l.priority = 0)))) : -1;
+		((next(status) = TRUE) & street2.t_l.state != GIALLO) : street2.t_l.priority;
+        TRUE: street2.t_l.priority;
+	esac;
+    next(street3.t_l.priority) := case
+        (status = FALSE & street3.s1.value = TRUE & street3.s2.value = TRUE & street3.s3.value = TRUE & street3.s4.value = TRUE ) : 5;
+		(status = FALSE & street3.s1.value = TRUE & street3.s2.value = FALSE & street3.s3.value = TRUE & street3.s4.value = TRUE ) : 4;
+		(status = FALSE & street3.s1.value = TRUE & street3.s2.value = TRUE & street3.s3.value = TRUE & street3.s4.value = FALSE ) : 4;
+		(status = FALSE & street3.s1.value = TRUE & street3.s2.value = FALSE & street3.s3.value = TRUE & street3.s4.value = FALSE ) : 3;
+		(status = FALSE & street3.s1.value = FALSE & street3.s2.value = FALSE & street3.s3.value = TRUE & street3.s4.value = TRUE ) : 2;
+		(status = FALSE & street3.s1.value = TRUE & street3.s2.value = TRUE & street3.s3.value = FALSE & street3.s4.value = FALSE ) : 2;
+		(status = FALSE & street3.s1.value = TRUE & street3.s2.value = FALSE & street3.s3.value = FALSE & street3.s4.value = FALSE ) : 1;
+		(status = FALSE & street3.s1.value = FALSE & street3.s2.value = FALSE & street3.s3.value = TRUE & street3.s4.value = FALSE ) : 1;
+		(status = FALSE & street3.s1.value = FALSE & street3.s2.value = FALSE & street3.s3.value = FALSE & street3.s4.value = FALSE ) : 0;
+        -- fix per casistiche non coperte (7/16) e/o non consentite
+        (status = FALSE & next(status = FALSE) & street3.t_l.priority = -1) : 0;
+        -- semaforo giallo che diventerà rosso per l'emergenza in arrivo, ripristino priorità (cond. DIPENDENTE da posizione!)
+        ((status) & e_value = 5 & e_sensor = FALSE & street3.t_l.state = GIALLO & next(street3.t_l.state) = ROSSO) : street3.t_l.gll;
+        -- semaforo giallo, reset priorità per non essere più pescato
+        ((status) & (street3.t_l.state = ROSSO) & next(street3.t_l.state = GIALLO)) : -1;
+        -- semaforo rosso e arriva emergenza in questa lane => resetto priorità 
+        ((status) & street3.t_l.state = ROSSO & next(street3.t_l.state = VERDE) & 
+        e_sensor = FALSE & e_value = 5 & e_street = 3) : -1;
+        -- reset se ultima rimasta con priorità -1
+        ((status) & (street3.t_l.priority) = 0 & 
+        (((street2.t_l.priority = -1) | (street2.t_l.priority = 0)) &
+        ((street1.t_l.priority = -1) | (street1.t_l.priority = 0)) &
+        ((street4.t_l.priority = -1) | (street4.t_l.priority = 0)))) : -1;
+		((next(status) = TRUE) & street3.t_l.state != GIALLO) : street3.t_l.priority;
+        TRUE: street3.t_l.priority;
+	esac;
+    next(street4.t_l.priority) := case
+        (status = FALSE & street4.s1.value = TRUE & street4.s2.value = TRUE & street4.s3.value = TRUE & street4.s4.value = TRUE ) : 5;
+		(status = FALSE & street4.s1.value = TRUE & street4.s2.value = FALSE & street4.s3.value = TRUE & street4.s4.value = TRUE ) : 4;
+		(status = FALSE & street4.s1.value = TRUE & street4.s2.value = TRUE & street4.s3.value = TRUE & street4.s4.value = FALSE ) : 4;
+		(status = FALSE & street4.s1.value = TRUE & street4.s2.value = FALSE & street4.s3.value = TRUE & street4.s4.value = FALSE ) : 3;
+		(status = FALSE & street4.s1.value = FALSE & street4.s2.value = FALSE & street4.s3.value = TRUE & street4.s4.value = TRUE ) : 2;
+		(status = FALSE & street4.s1.value = TRUE & street4.s2.value = TRUE & street4.s3.value = FALSE & street4.s4.value = FALSE ) : 2;
+		(status = FALSE & street4.s1.value = TRUE & street4.s2.value = FALSE & street4.s3.value = FALSE & street4.s4.value = FALSE ) : 1;
+		(status = FALSE & street4.s1.value = FALSE & street4.s2.value = FALSE & street4.s3.value = TRUE & street4.s4.value = FALSE ) : 1;
+		(status = FALSE & street4.s1.value = FALSE & street4.s2.value = FALSE & street4.s3.value = FALSE & street4.s4.value = FALSE ) : 0;
+        -- fix per casistiche non coperte (7/16) e/o non consentite
+        (status = FALSE & next(status = FALSE) & street4.t_l.priority = -1) : 0;
+        -- semaforo giallo che diventerà rosso per l'emergenza in arrivo, ripristino priorità (cond. DIPENDENTE da posizione!)
+        ((status) & e_value = 5 & e_sensor = FALSE & street4.t_l.state = GIALLO & next(street4.t_l.state) = ROSSO) : street4.t_l.gll;
+        -- semaforo giallo, reset priorità per non essere più pescato
+        ((status) & (street4.t_l.state = ROSSO) & next(street4.t_l.state = GIALLO)) : -1;
+        -- semaforo rosso e arriva emergenza in questa lane => resetto priorità 
+        ((status) & street4.t_l.state = ROSSO & next(street4.t_l.state = VERDE) & 
+        e_sensor = FALSE & e_value = 5 & e_street = 4) : -1;
+        -- reset se ultima rimasta con priorità -1
+        ((status) & (street4.t_l.priority) = 0 & 
+        (((street2.t_l.priority = -1) | (street2.t_l.priority = 0)) &
+        ((street3.t_l.priority = -1) | (street3.t_l.priority = 0)) &
+        ((street1.t_l.priority = -1) | (street1.t_l.priority = 0)))) : -1;
+		((next(status) = TRUE) & street4.t_l.state != GIALLO) : street4.t_l.priority;
+        TRUE: street4.t_l.priority;
+	esac;
+
+
+    -- logica memorizzazione prossimo semaforo giallo 
+    -- assegnazione in base alle priorità, se pari, strada candidata prima in ordine decrescente (bottom-up)
+    next(next_giallo) := case
+        (street1.t_l.state = ROSSO & (next(street1.t_l.priority) > next(street2.t_l.priority)) & (next(street1.t_l.priority) > next(street3.t_l.priority)) & (next(street1.t_l.priority) > next(street4.t_l.priority))) : 1;
+        (street2.t_l.state = ROSSO & (next(street2.t_l.priority) >= next(street1.t_l.priority)) & (next(street2.t_l.priority) > next(street3.t_l.priority)) & (next(street2.t_l.priority) > next(street4.t_l.priority))) : 2;
+        (street3.t_l.state = ROSSO & (next(street3.t_l.priority) >= next(street2.t_l.priority)) & (next(street3.t_l.priority) >= next(street1.t_l.priority)) & (next(street3.t_l.priority) > next(street4.t_l.priority))) : 3;
+        (street4.t_l.state = ROSSO & (next(street4.t_l.priority) >= next(street2.t_l.priority)) & (next(street4.t_l.priority) >= next(street3.t_l.priority)) & (next(street4.t_l.priority) >= next(street1.t_l.priority))) : 4;
+        TRUE: next_giallo;
+    esac;
+
+
+    -- logica assegnazione tempo di verde (GLL)
+    next(street1.t_l.gll) := case
+        -- priorità non ancora assegnate, copio il tempo di verde dalla prossima assegnazione
+        !(status) & (next(status) = TRUE) : next(street1.t_l.priority);
+        -- semaforo verde e GLL > 0 => decremento GLL 
+        ((street1.t_l.state = VERDE) & (next(street1.t_l.state) = VERDE) & (street1.t_l.gll > 0)) : street1.t_l.gll - 1;
+        -- semaforo rosso e GLL = 0 con emergenza che entra si incrementa, GLL=1 per simulare il passaggio del veicolo
+        (status) & e_value = 5 & e_sensor = FALSE & e_street = 1 &
+        street1.t_l.state = ROSSO & next(street1.t_l.state = VERDE) & (street1.t_l.gll = 0) : 1;
+        TRUE: street1.t_l.gll; 
+    esac;
+    next(street2.t_l.gll) := case
+        -- priorità non ancora assegnate, copio il tempo di verde dalla prossima assegnazione
+        !(status) & (next(status) = TRUE) : next(street2.t_l.priority);
+        -- semaforo verde e GLL > 0 => decremento GLL
+		((street2.t_l.state = VERDE) & (next(street2.t_l.state) = VERDE) & (street2.t_l.gll > 0)) : street2.t_l.gll - 1;
+        -- semaforo rosso e GLL = 0 con emergenza che entra si incrementa, GLL=1 per simulare il passaggio del veicolo
+        (status) & e_value = 5 & e_sensor = FALSE & e_street = 2 &
+        street2.t_l.state = ROSSO & next(street2.t_l.state = VERDE) & (street2.t_l.gll = 0) : 1;
+        TRUE: street2.t_l.gll;
+    esac;
+    next(street3.t_l.gll) := case
+        -- priorità non ancora assegnate, copio il tempo di verde dalla prossima assegnazione
+        !(status) & (next(status) = TRUE) : next(street3.t_l.priority);
+        -- semaforo verde e GLL > 0 => decremento GLL
+		((street3.t_l.state = VERDE) & (next(street3.t_l.state) = VERDE) & (street3.t_l.gll > 0)) : street3.t_l.gll - 1;
+        -- semaforo rosso e GLL = 0 con emergenza che entra si incrementa, GLL=1 per simulare il passaggio del veicolo
+        (status) & e_value = 5 & e_sensor = FALSE & e_street = 3 &
+        street3.t_l.state = ROSSO & next(street3.t_l.state = VERDE) & (street3.t_l.gll = 0) : 1;
+        TRUE: street3.t_l.gll;
+    esac;
+    next(street4.t_l.gll) := case
+        -- priorità non ancora assegnate, copio il tempo di verde dalla prossima assegnazione
+        !(status) & (next(status) = TRUE) : next(street4.t_l.priority);
+        -- semaforo verde e GLL > 0 => decremento GLL
+		((street4.t_l.state = VERDE) & (next(street4.t_l.state) = VERDE) & (street4.t_l.gll > 0)) : street4.t_l.gll - 1;
+        -- semaforo rosso e GLL = 0 con emergenza che entra si incrementa, GLL=1 per simulare il passaggio del veicolo
+        (status) & e_value = 5 & e_sensor = FALSE & e_street = 4 &
+        street4.t_l.state = ROSSO & next(street4.t_l.state = VERDE) & (street4.t_l.gll = 0) : 1;
+        TRUE: street4.t_l.gll;
+    esac;
+
+
+    -- logica cambi di stato semafori
+    next(street1.t_l.state) := case
+        -- SEMAFORO ROSSO | PRIORITA' MAGGIORE | NO EMERGENZA | => GIALLO
+        (((status) & next_giallo = 1 & street1.t_l.state = ROSSO & street1.t_l.priority > 0) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) & (
+        (((street2.t_l.state != GIALLO) & (street3.t_l.state != GIALLO) & (street4.t_l.state != GIALLO)) |
+        ((street1.t_l.state != VERDE) & (street2.t_l.state != VERDE) & (street3.t_l.state != VERDE) & (street4.t_l.state != VERDE))))) : GIALLO;
+        -- SEMAFORO VERDE | GLL = 0 | NO EMERGENZA | => ROSSO
+        ((status) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) &
+        ((street1.t_l.state = VERDE) & (street1.t_l.gll = 0))) : ROSSO;
+        -- SEMAFORO VERDE | EMERGENZA | E_STREET != 1 | => GIALLO
+        ((status) & (e_value = 5) & (street1.t_l.state = VERDE) & (e_street != 1) & (e_sensor = FALSE)) : GIALLO;
+        -- SEMAFORO GIALLO | NO VERDE oppure VERDE & GLL = 0 | NO EMERGENZA | => VERDE
+        ((status) & (street1.t_l.state = GIALLO) & 
+        (e_value != 5) & 
+        (((street2.t_l.state != VERDE) | (street2.t_l.state = VERDE & street2.t_l.gll = 0)) &
+        ((street3.t_l.state != VERDE) | (street3.t_l.state = VERDE & street3.t_l.gll = 0)) &
+        ((street4.t_l.state != VERDE) | (street4.t_l.state = VERDE & street4.t_l.gll = 0)))) : VERDE;
+        -- SEMAFORO GIALLO | EMERGENZA | E_STREET != 1 | => ROSSO
+        ((status) & street1.t_l.state = GIALLO & e_value = 5 & e_sensor = FALSE & e_street != 1) : ROSSO;
+        -- EMERGENZA | E_STREET = 1 | => VERDE
+        ((status) & next(status) = TRUE & e_value = 5 & e_sensor = FALSE & e_street = 1) : VERDE;
+        TRUE: street1.t_l.state;
+    esac;
+
+    next(street2.t_l.state) := case
+        -- SEMAFORO ROSSO | PRIORITA' MAGGIORE | NO EMERGENZA | => GIALLO
+        (((status) & next_giallo = 2 & street2.t_l.state = ROSSO & street2.t_l.priority > 0) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) & (
+        (((street1.t_l.state != GIALLO) & (street3.t_l.state != GIALLO) & (street4.t_l.state != GIALLO)) |
+        ((street1.t_l.state != VERDE) & (street2.t_l.state != VERDE) & (street3.t_l.state != VERDE) & (street4.t_l.state != VERDE))))) : GIALLO;
+        -- SEMAFORO VERDE | GLL = 0 | NO EMERGENZA | => ROSSO
+        ((status) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) &
+        ((street2.t_l.state = VERDE) & (street2.t_l.gll = 0))) : ROSSO;
+        -- SEMAFORO VERDE | EMERGENZA | E_STREET != 2 | => GIALLO
+        ((status) & (e_value = 5) & (street2.t_l.state = VERDE) & (e_street != 2) & (e_sensor = FALSE)) : GIALLO;
+        -- SEMAFORO GIALLO | NO VERDE oppure VERDE & GLL = 0 | NO EMERGENZA | => VERDE
+        ((status) & (street2.t_l.state = GIALLO) & 
+        (e_value != 5) & 
+        (((street4.t_l.state != VERDE) | (street4.t_l.state = VERDE & street4.t_l.gll = 0)) &
+        ((street3.t_l.state != VERDE) | (street3.t_l.state = VERDE & street3.t_l.gll = 0)) &
+        ((street1.t_l.state != VERDE) | (street1.t_l.state = VERDE & street1.t_l.gll = 0)))) : VERDE;
+        -- SEMAFORO GIALLO | EMERGENZA | E_STREET != 1 | => ROSSO
+        ((status) & street2.t_l.state = GIALLO & e_value = 5 & e_sensor = FALSE & e_street != 2) : ROSSO;
+        -- EMERGENZA | E_STREET = 2 | => VERDE
+        ((status) & next(status) = TRUE & e_value = 5 & e_sensor = FALSE & e_street = 2) : VERDE;
+        TRUE: street2.t_l.state;
+    esac;
+
+    next(street3.t_l.state) := case
+        -- SEMAFORO ROSSO | PRIORITA' MAGGIORE | NO EMERGENZA | => GIALLO
+        (((status) & next_giallo = 3 & street3.t_l.state = ROSSO & street3.t_l.priority > 0) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) & (
+        (((street1.t_l.state != GIALLO) & (street2.t_l.state != GIALLO) & (street4.t_l.state != GIALLO)) |
+        ((street1.t_l.state != VERDE) & (street2.t_l.state != VERDE) & (street3.t_l.state != VERDE) & (street4.t_l.state != VERDE))))) : GIALLO;
+        -- SEMAFORO VERDE | GLL = 0 | NO EMERGENZA | => ROSSO
+        ((status) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) &
+        ((street3.t_l.state = VERDE) & (street3.t_l.gll = 0))) : ROSSO;
+        -- SEMAFORO VERDE | EMERGENZA | E_STREET != 3 | => GIALLO
+        ((status) & (e_value = 5) & (street3.t_l.state = VERDE) & (e_street != 3) & (e_sensor = FALSE)) : GIALLO;
+        -- SEMAFORO GIALLO | NO VERDE oppure VERDE & GLL = 0 | NO EMERGENZA | => VERDE
+        ((status) & (street3.t_l.state = GIALLO) & 
+        (e_value != 5) & 
+        (((street2.t_l.state != VERDE) | (street2.t_l.state = VERDE & street2.t_l.gll = 0)) &
+        ((street4.t_l.state != VERDE) | (street4.t_l.state = VERDE & street4.t_l.gll = 0)) &
+        ((street1.t_l.state != VERDE) | (street1.t_l.state = VERDE & street1.t_l.gll = 0)))) : VERDE;
+        -- SEMAFORO GIALLO | EMERGENZA | E_STREET != 1 | => ROSSO
+        ((status) & street3.t_l.state = GIALLO & e_value = 5 & e_sensor = FALSE & e_street != 3) : ROSSO;
+        -- EMERGENZA | E_STREET = 3 | => VERDE
+        ((status) & next(status) = TRUE & e_value = 5 & e_sensor = FALSE & e_street = 3) : VERDE;
+        TRUE: street3.t_l.state;
+    esac;
+
+    next(street4.t_l.state) := case
+        -- SEMAFORO ROSSO | PRIORITA' MAGGIORE | NO EMERGENZA | => GIALLO
+        (((status) & next_giallo = 4 & street4.t_l.state = ROSSO & street4.t_l.priority > 0) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) & (
+        (((street1.t_l.state != GIALLO) & (street2.t_l.state != GIALLO) & (street3.t_l.state != GIALLO)) |
+        ((street1.t_l.state != VERDE) & (street2.t_l.state != VERDE) & (street3.t_l.state != VERDE) & (street4.t_l.state != VERDE))))) : GIALLO;
+        -- SEMAFORO VERDE | GLL = 0 | NO EMERGENZA | => ROSSO
+        ((status) & 
+        ((e_value != 5) | (e_value = 5 & e_sensor = TRUE)) &
+        ((street4.t_l.state = VERDE) & (street4.t_l.gll = 0))) : ROSSO;
+        -- SEMAFORO VERDE | EMERGENZA | E_STREET != 4 | => GIALLO
+        ((status) & (e_value = 5) & (street4.t_l.state = VERDE) & (e_street != 4) & (e_sensor = FALSE)) : GIALLO;
+        -- SEMAFORO GIALLO | NO VERDE oppure VERDE & GLL = 0 | NO EMERGENZA | => VERDE
+        ((status) & (street4.t_l.state = GIALLO) & 
+        (e_value != 5) & 
+        (((street2.t_l.state != VERDE) | (street2.t_l.state = VERDE & street2.t_l.gll = 0)) &
+        ((street3.t_l.state != VERDE) | (street3.t_l.state = VERDE & street3.t_l.gll = 0)) &
+        ((street1.t_l.state != VERDE) | (street1.t_l.state = VERDE & street1.t_l.gll = 0)))) : VERDE;
+        -- SEMAFORO GIALLO | EMERGENZA | E_STREET != 1 | => ROSSO
+        ((status) & street4.t_l.state = GIALLO & e_value = 5 & e_sensor = FALSE & e_street != 4) : ROSSO;
+        -- EMERGENZA | E_STREET = 4 | => VERDE
+        ((status) & next(status) = TRUE & e_value = 5 & e_sensor = FALSE & e_street = 4) : VERDE;
+        TRUE: street4.t_l.state;
+    esac;
+
+    -- logica rilevazione veicoli d'emergenza
+    next(e_sensor) := case
+        -- attivazione
+        (status) & !(e_sensor) & (e_value = 5) : TRUE;
+        -- disattivazione
+        (e_sensor) & 
+        ((e_street = 1 & next(street1.t_l.state) = ROSSO) |
+        (e_street = 2 & next(street2.t_l.state) = ROSSO) |
+        (e_street = 3 & next(street3.t_l.state) = ROSSO) |
+        (e_street = 4 & next(street4.t_l.state) = ROSSO)) : FALSE;
+        TRUE: e_sensor;
+    esac;
+
+    next(e_value) := case
+        -- se tutte le corsie hanno ricevuto priorità 0 non ha senso assegnare un veicolo d'emergenza
+        (next(street1.t_l.gll) = 0 & next(street2.t_l.gll) = 0 & next(street3.t_l.gll) = 0 & next(street4.t_l.gll) = 0) : 1..4;
+		-- si mantiene il valore generato se emergenza attiva
+        (next(e_sensor) = TRUE) : e_value;
+		TRUE: 1..5;
+	esac;
+
+	next(e_street) := case
+        -- si mantiene l'indicatore della corsia d'emergenza sino al passaggio del veicolo annesso e svuotamento corsia
+		(next(e_sensor) = TRUE) : e_street;
+		TRUE: 1..4;
+	esac;
+
+
+
+
+    
+
+
+
+

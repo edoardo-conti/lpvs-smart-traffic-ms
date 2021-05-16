@@ -1,0 +1,135 @@
+-- specification ( F ((((((((atmega2560.status & street1.t_l.state = ROSSO) & street2.t_l.state = ROSSO) & street3.t_l.state = ROSSO) & street4.t_l.state = ROSSO) & street1.t_l.priority = -1) & street2.t_l.priority = -1) & street3.t_l.priority = -1) & street4.t_l.priority = -1) ->  X !atmega2560.status)  is true
+-- specification  G ((((atmega2560.status & atmega2560.e_value = 5) & !atmega2560.e_sensor) & atmega2560.e_street = 1) ->  X street1.t_l.state = VERDE)  is true
+-- specification  G (((((atmega2560.status & atmega2560.e_value = 5) & !atmega2560.e_sensor) & atmega2560.e_street != 1) & street1.t_l.state = GIALLO) ->  X street1.t_l.state = ROSSO)  is true
+-- specification  G (((((atmega2560.status & atmega2560.e_value = 5) & !atmega2560.e_sensor) & atmega2560.e_street != 1) & street1.t_l.state = VERDE) ->  X street1.t_l.state = GIALLO)  is true
+-- specification  G ((((atmega2560.status & street1.t_l.state = VERDE) & atmega2560.e_value != 5) & street1.t_l.gll > 0) ->  X street1.t_l.state = VERDE)  is true
+-- specification  G (((atmega2560.status & street1.t_l.state = VERDE) & atmega2560.e_value != 5) ->  X street1.t_l.state = GIALLO)  is false
+-- as demonstrated by the following execution sequence
+Trace Description: LTL Counterexample 
+Trace Type: Counterexample 
+  -> State: 1.1 <-
+    street1.s1.value = FALSE
+    street1.s2.value = FALSE
+    street1.s3.value = FALSE
+    street1.s4.value = FALSE
+    street1.t_l.state = ROSSO
+    street1.t_l.gll = -1
+    street1.t_l.priority = 0
+    street2.s1.value = FALSE
+    street2.s2.value = FALSE
+    street2.s3.value = FALSE
+    street2.s4.value = FALSE
+    street2.t_l.state = ROSSO
+    street2.t_l.gll = -1
+    street2.t_l.priority = 0
+    street3.s1.value = FALSE
+    street3.s2.value = FALSE
+    street3.s3.value = FALSE
+    street3.s4.value = FALSE
+    street3.t_l.state = ROSSO
+    street3.t_l.gll = -1
+    street3.t_l.priority = 0
+    street4.s1.value = FALSE
+    street4.s2.value = FALSE
+    street4.s3.value = FALSE
+    street4.s4.value = FALSE
+    street4.t_l.state = ROSSO
+    street4.t_l.gll = -1
+    street4.t_l.priority = 0
+    atmega2560.status = FALSE
+    atmega2560.next_giallo = 0
+    atmega2560.e_value = 1
+    atmega2560.e_sensor = FALSE
+    atmega2560.e_street = 1
+  -> State: 1.2 <-
+    street1.s3.value = TRUE
+    street2.s2.value = TRUE
+    street2.s3.value = TRUE
+    street3.s1.value = TRUE
+    street3.s4.value = TRUE
+    street4.s1.value = TRUE
+    street4.s3.value = TRUE
+    atmega2560.next_giallo = 4
+  -> State: 1.3 <-
+    street1.s2.value = TRUE
+    street1.s4.value = TRUE
+    street1.t_l.priority = 1
+    street4.s1.value = FALSE
+    street4.s3.value = FALSE
+    street4.t_l.priority = 3
+  -> State: 1.4 <-
+    street1.s2.value = FALSE
+    street1.s3.value = FALSE
+    street1.s4.value = FALSE
+    street1.t_l.gll = 1
+    street2.s2.value = FALSE
+    street2.s3.value = FALSE
+    street2.t_l.gll = 0
+    street3.s1.value = FALSE
+    street3.s4.value = FALSE
+    street3.t_l.gll = 0
+    street4.t_l.gll = 0
+    street4.t_l.priority = 0
+    atmega2560.status = TRUE
+    atmega2560.next_giallo = 1
+    atmega2560.e_value = 5
+  -> State: 1.5 <-
+    street1.t_l.state = VERDE
+    street1.t_l.priority = -1
+    atmega2560.next_giallo = 4
+    atmega2560.e_sensor = TRUE
+  -> State: 1.6 <-
+    street1.t_l.gll = 0
+    street2.t_l.priority = -1
+    street3.t_l.priority = -1
+    street4.t_l.priority = -1
+    atmega2560.e_value = 2
+  -- Loop starts here
+  -> State: 1.7 <-
+    street1.t_l.state = ROSSO
+    atmega2560.e_sensor = FALSE
+  -> State: 1.8 <-
+    street1.s3.value = TRUE
+    street2.s2.value = TRUE
+    street2.s3.value = TRUE
+    street3.s1.value = TRUE
+    street3.s4.value = TRUE
+    street4.s1.value = TRUE
+    street4.s3.value = TRUE
+    atmega2560.status = FALSE
+  -> State: 1.9 <-
+    street1.s2.value = TRUE
+    street1.s4.value = TRUE
+    street1.t_l.priority = 1
+    street2.t_l.priority = 0
+    street3.t_l.priority = 0
+    street4.s1.value = FALSE
+    street4.s3.value = FALSE
+    street4.t_l.priority = 3
+  -> State: 1.10 <-
+    street1.s2.value = FALSE
+    street1.s3.value = FALSE
+    street1.s4.value = FALSE
+    street1.t_l.gll = 1
+    street2.s2.value = FALSE
+    street2.s3.value = FALSE
+    street3.s1.value = FALSE
+    street3.s4.value = FALSE
+    street4.t_l.priority = 0
+    atmega2560.status = TRUE
+    atmega2560.next_giallo = 1
+    atmega2560.e_value = 5
+  -> State: 1.11 <-
+    street1.t_l.state = VERDE
+    street1.t_l.priority = -1
+    atmega2560.next_giallo = 4
+    atmega2560.e_sensor = TRUE
+  -> State: 1.12 <-
+    street1.t_l.gll = 0
+    street2.t_l.priority = -1
+    street3.t_l.priority = -1
+    street4.t_l.priority = -1
+    atmega2560.e_value = 2
+  -> State: 1.13 <-
+    street1.t_l.state = ROSSO
+    atmega2560.e_sensor = FALSE

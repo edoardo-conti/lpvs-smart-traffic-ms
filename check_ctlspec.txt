@@ -1,0 +1,80 @@
+-- specification EF (((((((((((((street1.t_l.state = VERDE & street2.t_l.state = VERDE) & street3.t_l.state = VERDE) & street4.t_l.state = VERDE) | ((street1.t_l.state = VERDE & street2.t_l.state = VERDE) & street3.t_l.state = VERDE)) | ((street1.t_l.state = VERDE & street2.t_l.state = VERDE) & street4.t_l.state = VERDE)) | ((street1.t_l.state = VERDE & street3.t_l.state = VERDE) & street4.t_l.state = VERDE)) | ((street2.t_l.state = VERDE & street3.t_l.state = VERDE) & street4.t_l.state = VERDE)) | (street1.t_l.state = VERDE & street2.t_l.state = VERDE)) | (street1.t_l.state = VERDE & street3.t_l.state = VERDE)) | (street2.t_l.state = VERDE & street3.t_l.state = VERDE)) | (street2.t_l.state = VERDE & street4.t_l.state = VERDE)) | (street3.t_l.state = VERDE & street4.t_l.state = VERDE)) | (street4.t_l.state = VERDE & street1.t_l.state = VERDE))  is false
+-- as demonstrated by the following execution sequence
+Trace Description: CTL Counterexample 
+Trace Type: Counterexample 
+  -> State: 1.1 <-
+    street1.s1.value = FALSE
+    street1.s2.value = FALSE
+    street1.s3.value = FALSE
+    street1.s4.value = FALSE
+    street1.t_l.state = ROSSO
+    street1.t_l.gll = -1
+    street1.t_l.priority = 0
+    street2.s1.value = FALSE
+    street2.s2.value = FALSE
+    street2.s3.value = FALSE
+    street2.s4.value = FALSE
+    street2.t_l.state = ROSSO
+    street2.t_l.gll = -1
+    street2.t_l.priority = 0
+    street3.s1.value = FALSE
+    street3.s2.value = FALSE
+    street3.s3.value = FALSE
+    street3.s4.value = FALSE
+    street3.t_l.state = ROSSO
+    street3.t_l.gll = -1
+    street3.t_l.priority = 0
+    street4.s1.value = FALSE
+    street4.s2.value = FALSE
+    street4.s3.value = FALSE
+    street4.s4.value = FALSE
+    street4.t_l.state = ROSSO
+    street4.t_l.gll = -1
+    street4.t_l.priority = 0
+    atmega2560.status = FALSE
+    atmega2560.next_giallo = 0
+    atmega2560.e_value = 1
+    atmega2560.e_sensor = FALSE
+    atmega2560.e_street = 1
+-- specification EF (((((((((((((street1.t_l.state = GIALLO & street2.t_l.state = GIALLO) & street3.t_l.state = GIALLO) & street4.t_l.state = GIALLO) | ((street1.t_l.state = GIALLO & street2.t_l.state = GIALLO) & street3.t_l.state = GIALLO)) | ((street1.t_l.state = GIALLO & street2.t_l.state = GIALLO) & street4.t_l.state = GIALLO)) | ((street1.t_l.state = GIALLO & street3.t_l.state = GIALLO) & street4.t_l.state = GIALLO)) | ((street2.t_l.state = GIALLO & street3.t_l.state = GIALLO) & street4.t_l.state = GIALLO)) | (street1.t_l.state = GIALLO & street2.t_l.state = GIALLO)) | (street1.t_l.state = GIALLO & street3.t_l.state = GIALLO)) | (street2.t_l.state = GIALLO & street3.t_l.state = GIALLO)) | (street2.t_l.state = GIALLO & street4.t_l.state = GIALLO)) | (street3.t_l.state = GIALLO & street4.t_l.state = GIALLO)) | (street4.t_l.state = GIALLO & street1.t_l.state = GIALLO))  is false
+-- as demonstrated by the following execution sequence
+Trace Description: CTL Counterexample 
+Trace Type: Counterexample 
+  -> State: 2.1 <-
+    street1.s1.value = FALSE
+    street1.s2.value = FALSE
+    street1.s3.value = FALSE
+    street1.s4.value = FALSE
+    street1.t_l.state = ROSSO
+    street1.t_l.gll = -1
+    street1.t_l.priority = 0
+    street2.s1.value = FALSE
+    street2.s2.value = FALSE
+    street2.s3.value = FALSE
+    street2.s4.value = FALSE
+    street2.t_l.state = ROSSO
+    street2.t_l.gll = -1
+    street2.t_l.priority = 0
+    street3.s1.value = FALSE
+    street3.s2.value = FALSE
+    street3.s3.value = FALSE
+    street3.s4.value = FALSE
+    street3.t_l.state = ROSSO
+    street3.t_l.gll = -1
+    street3.t_l.priority = 0
+    street4.s1.value = FALSE
+    street4.s2.value = FALSE
+    street4.s3.value = FALSE
+    street4.s4.value = FALSE
+    street4.t_l.state = ROSSO
+    street4.t_l.gll = -1
+    street4.t_l.priority = 0
+    atmega2560.status = FALSE
+    atmega2560.next_giallo = 0
+    atmega2560.e_value = 1
+    atmega2560.e_sensor = FALSE
+    atmega2560.e_street = 1
+-- specification EF ((atmega2560.status & atmega2560.e_sensor) & (((street1.t_l.state = VERDE | street2.t_l.state = VERDE) | street3.t_l.state = VERDE) | street4.t_l.state = VERDE))  is true
+-- specification AF ((((((atmega2560.status & atmega2560.e_value = 5) & !atmega2560.e_sensor) & atmega2560.e_street = 1) & street1.t_l.state = ROSSO) & street1.t_l.gll = 0) -> AX street1.t_l.gll = 1)  is true
+-- specification (AF ((atmega2560.status & atmega2560.e_value != 5) & atmega2560.next_giallo = 1) -> AX street1.t_l.state = GIALLO)  is true
+-- specification AG (((atmega2560.status & atmega2560.e_value = 5) & !atmega2560.e_sensor) -> AX atmega2560.e_sensor = TRUE)  is true
